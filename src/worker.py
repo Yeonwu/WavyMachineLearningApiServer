@@ -96,7 +96,7 @@ class Worker(Process):
         print(f'{os.getpid()}: Extracting From {self.work.user_video_filename}')
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
-        extraction_cmd = f'sh {script_dir}/extract.sh --videofilename {self.work.user_video_filename}'
+        extraction_cmd = f'sh {script_dir}/extract.sh {self.work.user_video_filename}'
         result: str = os.popen(extraction_cmd).read()
         
         extracted_filename = self.work.user_video_filename.split('.')[0] + '.json'
@@ -107,7 +107,7 @@ class Worker(Process):
         print(f'{os.getpid()}: Comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)')
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
-        comparison_cmd = f'sh {script_dir}/comparison.sh --userjson {extracted_filename} --usersec {self.work.user_sec} --refvideojson {self.work.ref_json_filename} --refvideosec {self.work.ref_sec}'
+        comparison_cmd = f'sh {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {self.work.ref_json_filename} {self.work.ref_sec}'
         result: str = os.popen(comparison_cmd).read()
 
         no_ext = extracted_filename.split('.')[0]

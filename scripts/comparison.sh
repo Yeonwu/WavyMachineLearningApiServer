@@ -1,8 +1,5 @@
-#!/bin/sh
-venv_loc=/Users/oyeonwu/.python-venv/soma-ml/bin/activate
-python_file=/Users/oyeonwu/Desktop/comparison.py
-result_loc=/Users/oyeonwu/Desktop/Repo/soma/WavyMahineLearningApiServer
+#!/bin/bash
 
-source $venv_loc
-cd $result_loc
-python3 $python_file --userjson $1 --usersec $2 --refvideojson $3 --refvideosec $4
+source $ML_VENV_PATH
+cd $ML_RUN_PATH
+python3 $ML_PYTHON_SCRIPT_PATH/comparison.py --userjson $1 --usersec $2 --refvideojson $3 --refvideosec $4
