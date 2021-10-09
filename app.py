@@ -1,14 +1,19 @@
-from flask import Flask
-from dotenv import load_dotenv
+from multiprocessing import Pool, Queue, Process
+from time import sleep
+from waitress import serve
+from src.flask_app import FlaskWrapper
+from src.worker import Work, Worker
 import os
 
-load_dotenv(verbose=True)
-app = Flask(__name__)
-
-@app.route('/')
-def test():
-	return 'server working'
+def resolve_work(queue: Queue):
+    while True:
+        if not queue.empty():
+            work = queue.get()
+            Worker(work).resolve()
 
 if __name__ == '__main__':
-	from waitress import serve
-	serve(app, host='0.0.0.0', port='8080')
+    work_queue = Queue()
+    pool = Pool(2, initializer=resolve_work, initargs=(work_queue, ))
+
+    FlaskWrapper.set_queue(work_queue)
+    serve(FlaskWrapper.app)
