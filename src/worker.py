@@ -118,7 +118,6 @@ class Worker(Process):
 
     def __uploadS3(self, extracted_name: str, analysis_name: str):
         print(f'{os.getpid()}: Uploading {extracted_name}, {analysis_name} to S3 bucket')
-        sleep(2)
 
     def __call_api_success(self):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
