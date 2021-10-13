@@ -100,8 +100,7 @@ class Worker(Process):
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         extraction_cmd = f'bash {script_dir}/extract.sh {self.work.user_video_filename}'
-        raise ExtractException(f'{os.getpid()}: Failed to Extract From {self.work.user_video_filename}')
-        #result: str = os.popen(extraction_cmd).read()
+        result: str = os.popen(extraction_cmd).read()
         
         extracted_filename = self.work.user_video_filename.split('.')[0] + '_l2norm.json'
         
@@ -115,7 +114,7 @@ class Worker(Process):
         print(f'{os.getpid()}: Downloading {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}')
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         download_cmd = f'bash {script_dir}/download_ref_json.sh {ref_json_filename}'
-        # result: str = os.popen(download_cmd).read()
+        result: str = os.popen(download_cmd).read()
         
         print(download_cmd)
 
@@ -125,7 +124,7 @@ class Worker(Process):
         ref_json_path = os.getenv('REF_JSON_PATH')
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         comparison_cmd = f'bash {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {ref_json_path}/{self.work.ref_json_filename} {self.work.ref_sec}'
-        # result: str = os.popen(comparison_cmd).read()
+        result: str = os.popen(comparison_cmd).read()
 
         no_ext = extracted_filename.split('_l2')[0]
         analysis_filename = f'{no_ext}_analysis.json'
@@ -139,7 +138,7 @@ class Worker(Process):
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
 
         upload_cmd = f'bash {script_dir}/upload_s3.sh {extracted_name} {analysis_name}'
-        # result = os.popen(upload_cmd).read()
+        result = os.popen(upload_cmd).read()
 
     def __call_api_success(self, an_file, ext_file):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
@@ -155,7 +154,7 @@ class Worker(Process):
             "Authorization": self.work.jwt
         })
         if response.status_code != 201:
-            raise CallApiSuccessException(f'API request Failed. body:{json.dumps(response)}')
+            raise CallApiSuccessException(f'API request Failed. body:{response}')
         print(response)
 
     def __call_api_fail(self):
@@ -172,7 +171,7 @@ class Worker(Process):
             "Authorization": self.work.jwt
         })
         if response.status_code != 201:
-            raise CallApiSuccessException(f'API request Failed. body:{json.dumps(response)}')
+            raise CallApiSuccessException(f'API request Failed. body:{response}')
         print(response)
 
     def __clear_dir(self):
