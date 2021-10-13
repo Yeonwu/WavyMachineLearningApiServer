@@ -124,8 +124,8 @@ class Worker(Process):
         comparison_cmd = f'bash {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {ref_json_path}/{self.work.ref_json_filename} {self.work.ref_sec}'
         result: str = os.popen(comparison_cmd).read()
 
-        no_ext = extracted_filename.split('.')[0]
-        analysis_filename = f'/analyzes/{no_ext}_analysis.json'
+        no_ext = extracted_filename.split('_l2')[0]
+        analysis_filename = f'{no_ext}_analysis.json'
 
         return analysis_filename
 
