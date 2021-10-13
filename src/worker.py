@@ -63,9 +63,11 @@ class Worker(Process):
         try:
             print(f'{os.getpid()}')
             extracted_name = self.__extract()
+            self.__get_ref_json()
             analysis_name = self.__comparison(extracted_name)
             self.__uploadS3(extracted_name, analysis_name)
             self.__call_api_success()
+            self.__clear_dir()
             return WorkerResolveStatus.SUCCESS
             
         except ExtractException as e:
@@ -96,18 +98,30 @@ class Worker(Process):
         print(f'{os.getpid()}: Extracting From {self.work.user_video_filename}')
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
-        extraction_cmd = f'sh {script_dir}/extract.sh --videofilename {self.work.user_video_filename}'
+        extraction_cmd = f'bash {script_dir}/extract.sh {self.work.user_video_filename}'
         result: str = os.popen(extraction_cmd).read()
         
-        extracted_filename = self.work.user_video_filename.split('.')[0] + '.json'
+        extracted_filename = self.work.user_video_filename.split('.')[0] + '_l2norm.json'
         
         return extracted_filename
+
+    def __get_ref_json(self):
+        s3_bucket = os.getenv('REF_JSON_S3_BUCKET')
+        ref_json_path = os.getenv('REF_JSON_PATH')
+        ref_json_filename = self.work.ref_json_filename
+
+        print(f'{os.getpid()}: Downloading {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}')
+        script_dir = os.getenv('ROOT_DIR')+'/scripts'
+        download_cmd = f'bash {script_dir}/download_ref_json.sh {ref_json_filename}'
+        result: str = os.popen(download_cmd).read()
+        print(download_cmd)
 
     def __comparison(self, extracted_filename: str):
         print(f'{os.getpid()}: Comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)')
 
+        ref_json_path = os.getenv('REF_JSON_PATH')
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
-        comparison_cmd = f'sh {script_dir}/comparison.sh --userjson {extracted_filename} --usersec {self.work.user_sec} --refvideojson {self.work.ref_json_filename} --refvideosec {self.work.ref_sec}'
+        comparison_cmd = f'bash {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {ref_json_path}/{self.work.ref_json_filename} {self.work.ref_sec}'
         result: str = os.popen(comparison_cmd).read()
 
         no_ext = extracted_filename.split('.')[0]
@@ -126,6 +140,9 @@ class Worker(Process):
     def __call_api_fail(self):
         print(f'{os.getpid()}: Calling ApiFaile anSeq {self.work.an_seq}')
         sleep(2)
+
+    def __clear_dir(self):
+        pass
 
     def __retry(self):
         if self.work.is_max_retry():

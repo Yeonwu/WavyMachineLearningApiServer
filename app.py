@@ -13,7 +13,9 @@ def resolve_work(queue: Queue):
 
 if __name__ == '__main__':
     work_queue = Queue()
-    pool = Pool(2, initializer=resolve_work, initargs=(work_queue, ))
+
+    cpu_core = int(os.getenv('CPU_CORE'))
+    pool = Pool(cpu_core, initializer=resolve_work, initargs=(work_queue, ))
 
     FlaskWrapper.set_queue(work_queue)
     serve(FlaskWrapper.app)
