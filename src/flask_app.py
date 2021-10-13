@@ -20,7 +20,10 @@ app = FlaskWrapper.app
 @app.route('/', methods=['POST'])
 def register_work_to_queue():
     try:
-        work = Work(request.get_json())
+        body = request.get_json()
+        jwt = request.headers.get('Authorization')
+
+        work = Work(body, jwt)
         FlaskWrapper.queue.put(work)
         response_body = json.dumps({
             "message": 'Successfuly started analysis',
