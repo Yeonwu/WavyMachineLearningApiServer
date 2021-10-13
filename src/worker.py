@@ -133,6 +133,15 @@ class Worker(Process):
     def __uploadS3(self, extracted_name: str, analysis_name: str):
         print(f'{os.getpid()}: Uploading {extracted_name}, {analysis_name} to S3 bucket')
 
+        script_dir = os.getenv('ROOT_DIR')+'/scripts'
+        an_filepath = os.getenv('EXT_JSON_PATH') + f'/{analysis_name}'
+        ext_filepath = os.getenv('EXT_JSON_PATH') + f'{extracted_name}'
+
+        upload_cmd = f'{script_dir}/upload_s3.sh {ext_filepath} {an_filepath}'
+        result = os.popen(upload_cmd).read()
+
+        print(result)
+
     def __call_api_success(self):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
         sleep(2)
