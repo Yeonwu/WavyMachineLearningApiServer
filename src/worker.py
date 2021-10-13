@@ -134,10 +134,8 @@ class Worker(Process):
         print(f'{os.getpid()}: Uploading {extracted_name}, {analysis_name} to S3 bucket')
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
-        an_filepath = os.getenv('EXT_JSON_PATH') + f'/{analysis_name}'
-        ext_filepath = os.getenv('EXT_JSON_PATH') + f'{extracted_name}'
 
-        upload_cmd = f'{script_dir}/upload_s3.sh {ext_filepath} {an_filepath}'
+        upload_cmd = f'bash {script_dir}/upload_s3.sh {extracted_name} {analysis_name}'
         result = os.popen(upload_cmd).read()
 
         print(result)
