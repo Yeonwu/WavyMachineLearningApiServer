@@ -124,15 +124,21 @@ class Worker(Process):
         comparison_cmd = f'bash {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {ref_json_path}/{self.work.ref_json_filename} {self.work.ref_sec}'
         result: str = os.popen(comparison_cmd).read()
 
-        no_ext = extracted_filename.split('.')[0]
-        analysis_filename = f'/analyzes/{no_ext}_analysis.json'
+        no_ext = extracted_filename.split('_l2')[0]
+        analysis_filename = f'{no_ext}_analysis.json'
 
         return analysis_filename
 
 
     def __uploadS3(self, extracted_name: str, analysis_name: str):
         print(f'{os.getpid()}: Uploading {extracted_name}, {analysis_name} to S3 bucket')
-        sleep(2)
+
+        script_dir = os.getenv('ROOT_DIR')+'/scripts'
+
+        upload_cmd = f'bash {script_dir}/upload_s3.sh {extracted_name} {analysis_name}'
+        result = os.popen(upload_cmd).read()
+
+        print(result)
 
     def __call_api_success(self):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
