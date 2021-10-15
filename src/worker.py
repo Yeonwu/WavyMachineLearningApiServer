@@ -5,11 +5,11 @@ Worker runs work.
 """
 import os
 import requests
-import json
 from multiprocessing.context import Process
 from enum import Enum
+from retrying import retry
 
-from src.exceptions import CallApiFailException, CallApiSuccessException, ComparisionException, ExtractException, InvalidWorkException, UploadS3Exception
+from exceptions import CallApiFailException, CallApiSuccessException, ComparisionException, ExtractException, InvalidWorkException, UploadS3Exception
 
 class WorkerResolveStatus(Enum):
     """
@@ -37,6 +37,7 @@ class CMDExitCode(Enum):
 
 class Work:
     MAX_RETRY = 3
+    RETRY_WAIT = 1
     def __init__(self, body, jwt):
         try: 
             self.an_seq = body['an_seq']
@@ -48,16 +49,6 @@ class Work:
             self.jwt = jwt
         except Exception as exc:
             raise InvalidWorkException() from exc
-
-
-    def is_max_retry(self) -> bool:
-        if self.retry > Work.MAX_RETRY:
-            return False
-        return True
-
-    def retry(self):
-        self.retry_times += 1
-        return self
             
 
 class Worker(Process):
@@ -67,7 +58,7 @@ class Worker(Process):
 
     def resolve(self) -> WorkerResolveStatus:
         try:
-            print(f'{os.getpid()}')
+            print(f'{os.getpid()} started work')
             ext_file = self.__extract()
             self.__get_ref_json()
             an_file = self.__comparison(ext_file)
@@ -77,29 +68,29 @@ class Worker(Process):
             return WorkerResolveStatus.SUCCESS
             
         except ExtractException as e:
-            self.__retry()
             return WorkerResolveStatus.FAIL_EXTRACTION
 
         except ComparisionException as e:
-            self.__retry()
+            print(e)
             return WorkerResolveStatus.FAIL_COMPARISION
 
         except UploadS3Exception as e:
-            self.__retry()
+            print(e)
             return WorkerResolveStatus.FAIL_UPLOAD
 
         except CallApiSuccessException as e:
-            self.__retry()
+            print(e)
             return WorkerResolveStatus.FAIL_CALL_API
 
         except CallApiFailException as e:
-            self.__log()
+            print(e)
             return WorkerResolveStatus.FAIL_CALL_API
 
-        except:
-            self.__log()
+        except Exception as e:
+            print(e.with_traceback())
             return WorkerResolveStatus.FAIL
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __extract(self):
         print(f'{os.getpid()}: Extracting From {self.work.user_video_filename}')
 
@@ -124,6 +115,7 @@ class Worker(Process):
         
         return extracted_filename
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)  
     def __get_ref_json(self):
         s3_bucket = os.getenv('REF_JSON_S3_BUCKET')
         ref_json_path = os.getenv('REF_JSON_PATH')
@@ -151,6 +143,7 @@ class Worker(Process):
         
         return extracted_filename
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __comparison(self, extracted_filename: str):
         print(f'{os.getpid()}: Comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)')
 
@@ -177,7 +170,7 @@ class Worker(Process):
 
         return analysis_filename
 
-
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __uploadS3(self, extracted_name: str, analysis_name: str):
         print(f'{os.getpid()}: Uploading {extracted_name}, {analysis_name} to S3 bucket')
 
@@ -199,6 +192,7 @@ class Worker(Process):
                 f'console output: {result}'
             )
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_success(self, an_file, ext_file):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
@@ -216,6 +210,7 @@ class Worker(Process):
             raise CallApiSuccessException(f'API request Failed. body:{response}')
         print(response)
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_fail(self):
         print(f'{os.getpid()}: Calling ApiFail anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
@@ -236,19 +231,12 @@ class Worker(Process):
     def __clear_dir(self):
         pass
 
-    def __retry(self):
-        MAX_RETRY = True
-        if MAX_RETRY:
-            self.__call_api_fail()
-
-    def __log(self):
+    def __log(self, error):
         pass
 
     def test(self):
         ext_file = "wannabe_kakao_vertical_analysis.json"
         an_file = "wannabe_kakao_vertical_l2norm.json"
-        self.__call_api_success(an_file, ext_file)
-        # self.__call_api_fail()
 
 if __name__ == '__main__':
     jwt = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtYnJTZXEiOiIxIiwiZXhwIjoxNjM0MTI5ODQxLCJhY2Nlc3NUb2tlbiI6Ik5LQmlHQWNZQ2ViZFlXMEt1VkpEZDVLODFjWk03VmEyaEFKNHh3b3BiN2tBQUFGOGVIRDRVdyIsImlhdCI6MTYzNDEwODI0Mn0.4kt1bEndNSP_VWpwz7FC8qgczscNAGGglbsyXFi8Ils'
@@ -261,4 +249,4 @@ if __name__ == '__main__':
     },
     jwt)
     worker = Worker(work)
-    worker.test()
+    print(worker.resolve())
