@@ -18,4 +18,6 @@ if __name__ == '__main__':
     pool = Pool(cpu_core, initializer=resolve_work, initargs=(work_queue, ))
 
     FlaskWrapper.set_queue(work_queue)
-    serve(FlaskWrapper.app)
+    serve(FlaskWrapper.app, port=80)
+
+    
