@@ -77,7 +77,6 @@ class Worker(Process):
             return WorkerResolveStatus.SUCCESS
             
         except ExtractException as e:
-            print(e)
             self.__retry()
             return WorkerResolveStatus.FAIL_EXTRACTION
 
@@ -107,6 +106,19 @@ class Worker(Process):
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         extraction_cmd = f'bash {script_dir}/extract.sh {self.work.user_video_filename}'
         result: str = os.popen(extraction_cmd).read()
+
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to extract From {self.work.user_video_filename}\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while extracting From {self.work.user_video_filename}\n' + \
+                f'console output: {result}'
+            )
         
         extracted_filename = self.work.user_video_filename.split('.')[0] + '_l2norm.json'
         
@@ -121,8 +133,23 @@ class Worker(Process):
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         download_cmd = f'bash {script_dir}/download_ref_json.sh {ref_json_filename}'
         result: str = os.popen(download_cmd).read()
+
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to download ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while downloading ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
+                f'console output: {result}'
+            )
         
-        print(download_cmd)
+        extracted_filename = self.work.user_video_filename.split('.')[0] + '_l2norm.json'
+        
+        return extracted_filename
 
     def __comparison(self, extracted_filename: str):
         print(f'{os.getpid()}: Comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)')
@@ -131,6 +158,19 @@ class Worker(Process):
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         comparison_cmd = f'bash {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {ref_json_path}/{self.work.ref_json_filename} {self.work.ref_sec}'
         result: str = os.popen(comparison_cmd).read()
+
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to compare {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
+                f'console output: {result}'
+            )
 
         no_ext = extracted_filename.split('_l2')[0]
         analysis_filename = f'{no_ext}_analysis.json'
@@ -145,6 +185,19 @@ class Worker(Process):
 
         upload_cmd = f'bash {script_dir}/upload_s3.sh {extracted_name} {analysis_name}'
         result = os.popen(upload_cmd).read()
+
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to upload {extracted_name}, {analysis_name} to S3 bucket\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while uploading {extracted_name}, {analysis_name} to S3 bucket\n' + \
+                f'console output: {result}'
+            )
 
     def __call_api_success(self, an_file, ext_file):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
