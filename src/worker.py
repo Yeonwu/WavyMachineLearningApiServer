@@ -24,10 +24,16 @@ class WorkerResolveStatus(Enum):
 
 class CMDExitCode(Enum):
     SUCCESS = 0,
+    FAILED = 1,
+    NOT_HANDLED = 2,
 
     @staticmethod
-    def loads(cmd_output):
-        return 0
+    def loads(cmd_output: str):
+        if 'success' in cmd_output:
+            return CMDExitCode.SUCCESS
+        elif 'failed' in cmd_output:
+            return CMDExitCode.FAILED
+        return CMDExitCode.NOT_HANDLED
 
 class Work:
     MAX_RETRY = 3
