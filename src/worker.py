@@ -9,7 +9,7 @@ from multiprocessing.context import Process
 from enum import Enum
 from retrying import retry
 
-from exceptions import CallApiFailException, CallApiSuccessException, ComparisionException, ExtractException, InvalidWorkException, UploadS3Exception
+from src.exceptions import CallApiFailException, CallApiSuccessException, ComparisionException, ExtractException, InvalidWorkException, UploadS3Exception
 
 class WorkerResolveStatus(Enum):
     """
