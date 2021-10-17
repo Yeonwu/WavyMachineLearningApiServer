@@ -68,6 +68,7 @@ class Worker(Process):
             return WorkerResolveStatus.SUCCESS
             
         except ExtractException as e:
+            print(e)
             return WorkerResolveStatus.FAIL_EXTRACTION
 
         except ComparisionException as e:
