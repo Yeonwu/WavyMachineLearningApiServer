@@ -35,6 +35,16 @@ class CMDExitCode(Enum):
             return CMDExitCode.FAILED
         return CMDExitCode.NOT_HANDLED
 
+def parse_sec(raw_sec: str) -> int:
+    raw_time = int(raw_sec.split(':')[0])
+    raw_min = int(raw_sec.split(':')[1])
+    raw_sec = int(raw_sec.split(':')[2])
+
+    SEC_PER_TIME = 3600
+    SEC_PER_MIN = 60
+
+    return raw_time*SEC_PER_TIME + raw_min*SEC_PER_MIN + raw_sec
+
 class Work:
     MAX_RETRY = 3
     RETRY_WAIT = 1
@@ -42,13 +52,14 @@ class Work:
         try: 
             self.an_seq = body['an_seq']
             self.user_video_filename = body['user_video_filename']
-            self.user_sec = body['user_sec']
+            self.user_sec = parse_sec(body['user_sec'])
             self.ref_json_filename = body['ref_json_filename']
-            self.ref_sec = body['ref_sec']
+            self.ref_sec = parse_sec(body['ref_sec'])
             self.retry_times = 0
             self.jwt = jwt
         except Exception as exc:
             raise InvalidWorkException() from exc
+    
             
 
 class Worker(Process):
