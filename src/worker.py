@@ -208,7 +208,7 @@ class Worker(Process):
     def __call_api_success(self, an_file, ext_file):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
-        response = requests.post(URL, json={
+        response = requests.put(URL, json={
             "anSeq": self.work.an_seq,
             "anScore": 0,
             "anGradeCode": "50001",
@@ -226,7 +226,7 @@ class Worker(Process):
     def __call_api_fail(self):
         print(f'{os.getpid()}: Calling ApiFail anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
-        response = requests.post(URL, json={
+        response = requests.put(URL, json={
             "anSeq": self.work.an_seq,
             "anScore": 0,
             "anGradeCode": "50001",
