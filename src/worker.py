@@ -80,26 +80,32 @@ class Worker(Process):
             
         except ExtractException as e:
             print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_EXTRACTION
 
         except ComparisionException as e:
             print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_COMPARISION
 
         except UploadS3Exception as e:
             print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_UPLOAD
 
         except CallApiSuccessException as e:
             print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_CALL_API
 
         except CallApiFailException as e:
             print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_CALL_API
 
         except Exception as e:
             print(e.with_traceback())
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
@@ -218,7 +224,7 @@ class Worker(Process):
         }, headers={
             "Authorization": self.work.jwt
         })
-        if response.status_code != 201:
+        if response.status_code != 200:
             raise CallApiSuccessException(f'API request Failed. body:{response}')
         print(response)
 
@@ -236,7 +242,7 @@ class Worker(Process):
         }, headers={
             "Authorization": self.work.jwt
         })
-        if response.status_code != 201:
+        if response.status_code != 200:
             raise CallApiSuccessException(f'API request Failed. body:{response}')
         print(response)
 
