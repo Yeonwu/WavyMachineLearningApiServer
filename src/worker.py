@@ -5,9 +5,9 @@ Worker runs work.
 """
 import os
 import requests
-import json
 from multiprocessing.context import Process
 from enum import Enum
+from retrying import retry
 
 from src.exceptions import CallApiFailException, CallApiSuccessException, ComparisionException, ExtractException, InvalidWorkException, UploadS3Exception
 
@@ -24,34 +24,42 @@ class WorkerResolveStatus(Enum):
 
 class CMDExitCode(Enum):
     SUCCESS = 0,
+    FAILED = 1,
+    NOT_HANDLED = 2,
 
     @staticmethod
-    def loads(cmd_output):
-        return 0
+    def loads(cmd_output: str):
+        if 'success' in cmd_output:
+            return CMDExitCode.SUCCESS
+        elif 'failed' in cmd_output:
+            return CMDExitCode.FAILED
+        return CMDExitCode.NOT_HANDLED
+
+def parse_sec(raw_sec: str) -> int:
+    raw_time = int(raw_sec.split(':')[0])
+    raw_min = int(raw_sec.split(':')[1])
+    raw_sec = int(raw_sec.split(':')[2])
+
+    SEC_PER_TIME = 3600
+    SEC_PER_MIN = 60
+
+    return raw_time*SEC_PER_TIME + raw_min*SEC_PER_MIN + raw_sec
 
 class Work:
     MAX_RETRY = 3
+    RETRY_WAIT = 1
     def __init__(self, body, jwt):
         try: 
             self.an_seq = body['an_seq']
             self.user_video_filename = body['user_video_filename']
-            self.user_sec = body['user_sec']
+            self.user_sec = parse_sec(body['user_sec'])
             self.ref_json_filename = body['ref_json_filename']
-            self.ref_sec = body['ref_sec']
+            self.ref_sec = parse_sec(body['ref_sec'])
             self.retry_times = 0
             self.jwt = jwt
         except Exception as exc:
             raise InvalidWorkException() from exc
-
-
-    def is_max_retry(self) -> bool:
-        if self.retry > Work.MAX_RETRY:
-            return False
-        return True
-
-    def retry(self):
-        self.retry_times += 1
-        return self
+    
             
 
 class Worker(Process):
@@ -61,7 +69,7 @@ class Worker(Process):
 
     def resolve(self) -> WorkerResolveStatus:
         try:
-            print(f'{os.getpid()}')
+            print(f'{os.getpid()} started work')
             ext_file = self.__extract()
             self.__get_ref_json()
             an_file = self.__comparison(ext_file)
@@ -72,40 +80,60 @@ class Worker(Process):
             
         except ExtractException as e:
             print(e)
-            self.__retry()
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_EXTRACTION
 
         except ComparisionException as e:
-            self.__retry()
+            print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_COMPARISION
 
         except UploadS3Exception as e:
-            self.__retry()
+            print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_UPLOAD
 
         except CallApiSuccessException as e:
-            self.__retry()
+            print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_CALL_API
 
         except CallApiFailException as e:
-            self.__log()
+            print(e)
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL_CALL_API
 
-        except:
-            self.__log()
+        except Exception as e:
+            print(e.with_traceback())
+            self.__call_api_fail()
             return WorkerResolveStatus.FAIL
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __extract(self):
         print(f'{os.getpid()}: Extracting From {self.work.user_video_filename}')
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         extraction_cmd = f'bash {script_dir}/extract.sh {self.work.user_video_filename}'
         result: str = os.popen(extraction_cmd).read()
+
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to extract From {self.work.user_video_filename}\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while extracting From {self.work.user_video_filename}\n' + \
+                f'console output: {result}'
+            )
         
         extracted_filename = self.work.user_video_filename.split('.')[0] + '_l2norm.json'
         
         return extracted_filename
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)  
     def __get_ref_json(self):
         s3_bucket = os.getenv('REF_JSON_S3_BUCKET')
         ref_json_path = os.getenv('REF_JSON_PATH')
@@ -115,9 +143,25 @@ class Worker(Process):
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         download_cmd = f'bash {script_dir}/download_ref_json.sh {ref_json_filename}'
         result: str = os.popen(download_cmd).read()
-        
-        print(download_cmd)
 
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to download ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while downloading ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
+                f'console output: {result}'
+            )
+        
+        extracted_filename = self.work.user_video_filename.split('.')[0] + '_l2norm.json'
+        
+        return extracted_filename
+
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __comparison(self, extracted_filename: str):
         print(f'{os.getpid()}: Comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)')
 
@@ -126,12 +170,25 @@ class Worker(Process):
         comparison_cmd = f'bash {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {ref_json_path}/{self.work.ref_json_filename} {self.work.ref_sec}'
         result: str = os.popen(comparison_cmd).read()
 
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to compare {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
+                f'console output: {result}'
+            )
+
         no_ext = extracted_filename.split('_l2')[0]
         analysis_filename = f'{no_ext}_analysis.json'
 
         return analysis_filename
 
-
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __uploadS3(self, extracted_name: str, analysis_name: str):
         print(f'{os.getpid()}: Uploading {extracted_name}, {analysis_name} to S3 bucket')
 
@@ -140,10 +197,24 @@ class Worker(Process):
         upload_cmd = f'bash {script_dir}/upload_s3.sh {extracted_name} {analysis_name}'
         result = os.popen(upload_cmd).read()
 
+        status = CMDExitCode.loads(result)
+
+        if status == CMDExitCode.FAILED:
+            raise ExtractException(
+                f'{os.getpid()}: Failed to upload {extracted_name}, {analysis_name} to S3 bucket\n' + \
+                f'console output: {result}'
+            )
+        if status == CMDExitCode.NOT_HANDLED:
+            raise ExtractException(
+                f'{os.getpid()}: Not handled error occured while uploading {extracted_name}, {analysis_name} to S3 bucket\n' + \
+                f'console output: {result}'
+            )
+
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_success(self, an_file, ext_file):
         print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
-        response = requests.post(URL, json={
+        response = requests.put(URL, json={
             "anSeq": self.work.an_seq,
             "anScore": 0,
             "anGradeCode": "50001",
@@ -153,14 +224,15 @@ class Worker(Process):
         }, headers={
             "Authorization": self.work.jwt
         })
-        if response.status_code != 201:
+        if response.status_code != 200:
             raise CallApiSuccessException(f'API request Failed. body:{response}')
         print(response)
 
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_fail(self):
         print(f'{os.getpid()}: Calling ApiFail anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
-        response = requests.post(URL, json={
+        response = requests.put(URL, json={
             "anSeq": self.work.an_seq,
             "anScore": 0,
             "anGradeCode": "50001",
@@ -170,26 +242,19 @@ class Worker(Process):
         }, headers={
             "Authorization": self.work.jwt
         })
-        if response.status_code != 201:
+        if response.status_code != 200:
             raise CallApiSuccessException(f'API request Failed. body:{response}')
         print(response)
 
     def __clear_dir(self):
         pass
 
-    def __retry(self):
-        MAX_RETRY = True
-        if MAX_RETRY:
-            self.__call_api_fail()
-
-    def __log(self):
+    def __log(self, error):
         pass
 
     def test(self):
         ext_file = "wannabe_kakao_vertical_analysis.json"
         an_file = "wannabe_kakao_vertical_l2norm.json"
-        self.__call_api_success(an_file, ext_file)
-        # self.__call_api_fail()
 
 if __name__ == '__main__':
     jwt = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtYnJTZXEiOiIxIiwiZXhwIjoxNjM0MTI5ODQxLCJhY2Nlc3NUb2tlbiI6Ik5LQmlHQWNZQ2ViZFlXMEt1VkpEZDVLODFjWk03VmEyaEFKNHh3b3BiN2tBQUFGOGVIRDRVdyIsImlhdCI6MTYzNDEwODI0Mn0.4kt1bEndNSP_VWpwz7FC8qgczscNAGGglbsyXFi8Ils'
@@ -202,4 +267,4 @@ if __name__ == '__main__':
     },
     jwt)
     worker = Worker(work)
-    worker.test()
+    print(worker.resolve())
