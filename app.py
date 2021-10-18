@@ -9,8 +9,8 @@ import src.log as log
 def resolve_work(queue: Queue):
     log.info(f'[{os.getpid()}] Starting worker process.')
     try:
+        log.info(f'[{os.getpid()}] Listening to queue.')
         while True:
-            log.info(f'[{os.getpid()}] Listening to queue.')
             if not queue.empty():
                 work = queue.get()
                 Worker(work).resolve()
