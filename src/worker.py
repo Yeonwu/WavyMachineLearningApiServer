@@ -10,6 +10,7 @@ from enum import Enum
 from retrying import retry
 
 from src.exceptions import CallApiFailException, CallApiSuccessException, ComparisionException, ExtractException, InvalidWorkException, UploadS3Exception
+import src.log as log
 
 class WorkerResolveStatus(Enum):
     """
@@ -57,8 +58,8 @@ class Work:
             self.ref_sec = parse_sec(body['ref_sec'])
             self.retry_times = 0
             self.jwt = jwt
-        except Exception as exc:
-            raise InvalidWorkException() from exc
+        except:
+            raise InvalidWorkException(f'Invalid Work format.\n args: {body}, {jwt}')
     
             
 
@@ -69,63 +70,65 @@ class Worker(Process):
 
     def resolve(self) -> WorkerResolveStatus:
         try:
-            print(f'{os.getpid()} started work')
+            log.info(f'[{os.getpid()}] Started work')
             ext_file = self.__extract()
             self.__get_ref_json()
             an_file = self.__comparison(ext_file)
             self.__uploadS3(ext_file, an_file)
             self.__call_api_success(an_file, ext_file)
             self.__clear_dir()
+            log.info(f'[{os.getpid()}] Successfully finished work')
             return WorkerResolveStatus.SUCCESS
             
         except ExtractException as e:
-            print(e)
+            log.error(e)
             self.__call_api_fail()
             return WorkerResolveStatus.FAIL_EXTRACTION
 
         except ComparisionException as e:
-            print(e)
+            log.error(e)
             self.__call_api_fail()
             return WorkerResolveStatus.FAIL_COMPARISION
 
         except UploadS3Exception as e:
-            print(e)
+            log.error(e)
             self.__call_api_fail()
             return WorkerResolveStatus.FAIL_UPLOAD
 
         except CallApiSuccessException as e:
-            print(e)
+            log.error(e)
             self.__call_api_fail()
             return WorkerResolveStatus.FAIL_CALL_API
 
         except CallApiFailException as e:
-            print(e)
+            log.error(e)
             self.__call_api_fail()
             return WorkerResolveStatus.FAIL_CALL_API
 
         except Exception as e:
-            print(e.with_traceback())
+            log.error(e.with_traceback())
             self.__call_api_fail()
             return WorkerResolveStatus.FAIL
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __extract(self):
-        print(f'{os.getpid()}: Extracting From {self.work.user_video_filename}')
+        log.info(f'[{os.getpid()}] Extracting From {self.work.user_video_filename}')
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         extraction_cmd = f'bash {script_dir}/extract.sh {self.work.user_video_filename}'
         result: str = os.popen(extraction_cmd).read()
+        log.info(f'[{os.getpid()}] Extraction cmd output: {result}')
 
         status = CMDExitCode.loads(result)
 
         if status == CMDExitCode.FAILED:
             raise ExtractException(
-                f'{os.getpid()}: Failed to extract From {self.work.user_video_filename}\n' + \
+                f'[{os.getpid()}] Failed to extract From {self.work.user_video_filename}\n' + \
                 f'console output: {result}'
             )
         if status == CMDExitCode.NOT_HANDLED:
             raise ExtractException(
-                f'{os.getpid()}: Not handled error occured while extracting From {self.work.user_video_filename}\n' + \
+                f'[{os.getpid()}] Not handled error occured while extracting From {self.work.user_video_filename}\n' + \
                 f'console output: {result}'
             )
         
@@ -139,21 +142,22 @@ class Worker(Process):
         ref_json_path = os.getenv('REF_JSON_PATH')
         ref_json_filename = self.work.ref_json_filename
 
-        print(f'{os.getpid()}: Downloading {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}')
+        log.info(f'[{os.getpid()}] Downloading {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}')
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         download_cmd = f'bash {script_dir}/download_ref_json.sh {ref_json_filename}'
         result: str = os.popen(download_cmd).read()
+        log.info(f'[{os.getpid()}] Download cmd output: {result}')
 
         status = CMDExitCode.loads(result)
 
         if status == CMDExitCode.FAILED:
             raise ExtractException(
-                f'{os.getpid()}: Failed to download ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
+                f'[{os.getpid()}] Failed to download ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
                 f'console output: {result}'
             )
         if status == CMDExitCode.NOT_HANDLED:
             raise ExtractException(
-                f'{os.getpid()}: Not handled error occured while downloading ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
+                f'[{os.getpid()}] Not handled error occured while downloading ref json From {s3_bucket}/{ref_json_filename} to {ref_json_path}/{ref_json_filename}\n' + \
                 f'console output: {result}'
             )
         
@@ -163,23 +167,25 @@ class Worker(Process):
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __comparison(self, extracted_filename: str):
-        print(f'{os.getpid()}: Comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)')
+        log.info(f'[{os.getpid()}] Comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)')
 
         ref_json_path = os.getenv('REF_JSON_PATH')
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
         comparison_cmd = f'bash {script_dir}/comparison.sh {extracted_filename} {self.work.user_sec} {ref_json_path}/{self.work.ref_json_filename} {self.work.ref_sec}'
         result: str = os.popen(comparison_cmd).read()
 
+        log.info(f'[{os.getpid()}] Compare cmd output: {result}')
+
         status = CMDExitCode.loads(result)
 
         if status == CMDExitCode.FAILED:
             raise ExtractException(
-                f'{os.getpid()}: Failed to compare {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
+                f'[{os.getpid()}] Failed to compare {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
                 f'console output: {result}'
             )
         if status == CMDExitCode.NOT_HANDLED:
             raise ExtractException(
-                f'{os.getpid()}: Not handled error occured while comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
+                f'[{os.getpid()}] Not handled error occured while comparing {extracted_filename}(usr) to {self.work.ref_json_filename}(ref)\n' + \
                 f'console output: {result}'
             )
 
@@ -190,29 +196,30 @@ class Worker(Process):
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __uploadS3(self, extracted_name: str, analysis_name: str):
-        print(f'{os.getpid()}: Uploading {extracted_name}, {analysis_name} to S3 bucket')
+        log.info(f'[{os.getpid()}] Uploading {extracted_name}, {analysis_name} to S3 bucket')
 
         script_dir = os.getenv('ROOT_DIR')+'/scripts'
 
         upload_cmd = f'bash {script_dir}/upload_s3.sh {extracted_name} {analysis_name}'
         result = os.popen(upload_cmd).read()
+        log.info(f'[{os.getpid()}] Upload cmd output: {result}')
 
         status = CMDExitCode.loads(result)
 
         if status == CMDExitCode.FAILED:
             raise ExtractException(
-                f'{os.getpid()}: Failed to upload {extracted_name}, {analysis_name} to S3 bucket\n' + \
+                f'[{os.getpid()}] Failed to upload {extracted_name}, {analysis_name} to S3 bucket\n' + \
                 f'console output: {result}'
             )
         if status == CMDExitCode.NOT_HANDLED:
             raise ExtractException(
-                f'{os.getpid()}: Not handled error occured while uploading {extracted_name}, {analysis_name} to S3 bucket\n' + \
+                f'[{os.getpid()}] Not handled error occured while uploading {extracted_name}, {analysis_name} to S3 bucket\n' + \
                 f'console output: {result}'
             )
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_success(self, an_file, ext_file):
-        print(f'{os.getpid()}: Calling ApiSuccess anSeq {self.work.an_seq}')
+        log.info(f'[{os.getpid()}] Calling ApiSuccess anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
         response = requests.put(URL, json={
             "anSeq": self.work.an_seq,
@@ -224,13 +231,14 @@ class Worker(Process):
         }, headers={
             "Authorization": self.work.jwt
         })
+
         if response.status_code != 200:
-            raise CallApiSuccessException(f'API request Failed. body:{response}')
+            raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response}')
         print(response)
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_fail(self):
-        print(f'{os.getpid()}: Calling ApiFail anSeq {self.work.an_seq}')
+        print(f'[{os.getpid()}] Calling ApiFail anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
         response = requests.put(URL, json={
             "anSeq": self.work.an_seq,
@@ -243,18 +251,11 @@ class Worker(Process):
             "Authorization": self.work.jwt
         })
         if response.status_code != 200:
-            raise CallApiSuccessException(f'API request Failed. body:{response}')
+            raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response}')
         print(response)
 
     def __clear_dir(self):
         pass
-
-    def __log(self, error):
-        pass
-
-    def test(self):
-        ext_file = "wannabe_kakao_vertical_analysis.json"
-        an_file = "wannabe_kakao_vertical_l2norm.json"
 
 if __name__ == '__main__':
     jwt = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtYnJTZXEiOiIxIiwiZXhwIjoxNjM0MTI5ODQxLCJhY2Nlc3NUb2tlbiI6Ik5LQmlHQWNZQ2ViZFlXMEt1VkpEZDVLODFjWk03VmEyaEFKNHh3b3BiN2tBQUFGOGVIRDRVdyIsImlhdCI6MTYzNDEwODI0Mn0.4kt1bEndNSP_VWpwz7FC8qgczscNAGGglbsyXFi8Ils'

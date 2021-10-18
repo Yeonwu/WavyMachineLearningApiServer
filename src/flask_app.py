@@ -4,6 +4,7 @@ from flask import Flask, request, Response
 from dotenv import load_dotenv
 from multiprocessing import Queue
 from src.worker import InvalidWorkException, Work
+import src.log as log
 
 load_dotenv(verbose=True)
 
@@ -22,6 +23,7 @@ def register_work_to_queue():
     try:
         body = request.get_json()
         jwt = request.headers.get('Authorization')
+        log.info(f'Request body: {body}, {jwt}')
 
         work = Work(body, jwt)
         FlaskWrapper.queue.put(work)
@@ -30,13 +32,16 @@ def register_work_to_queue():
         })
         return Response(response_body, status=HTTPStatus.ACCEPTED)
         
-    except InvalidWorkException:
+    except InvalidWorkException as e:
+        log.error(e.with_traceback())
         response_body = json.dumps({
-            "message": 'Invalid Work'
+            "message": 'Invalid request body'
         })
         return Response(response_body, status=HTTPStatus.BAD_REQUEST)
 
-    except:
+    except Exception as e:
+        log.error('Unhandled error occured.')
+        log.error(e.with_traceback())
         response_body = json.dumps({
             "message": 'Internal Error'
         })
