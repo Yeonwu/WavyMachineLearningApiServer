@@ -76,8 +76,9 @@ class Worker(Process):
             ext_file = self.__extract()
             self.__get_ref_json()
             an_file = self.__comparison(ext_file)
+            total_score = self.__get_total_score(an_file)
             self.__uploadS3(ext_file, an_file)
-            self.__call_api_success(an_file, ext_file)
+            self.__call_api_success(an_file, ext_file, total_score)
             self.__clear_dir()
             log.info(f'[{os.getpid()}] Successfully finished work')
             return WorkerResolveStatus.SUCCESS
@@ -225,7 +226,7 @@ class Worker(Process):
             )
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
-    def get_total_score(self, an_file) -> int:
+    def __get_total_score(self, an_file) -> int:
         file_path = str(os.getenv('AN_JSON_PATH')) + f'/{an_file}'
         try:
             reader = AnalysesJsonReader(file_path)
@@ -236,12 +237,12 @@ class Worker(Process):
 
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
-    def __call_api_success(self, an_file, ext_file):
+    def __call_api_success(self, an_file, ext_file, total_score):
         log.info(f'[{os.getpid()}] Calling ApiSuccess anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
         response = requests.put(URL, json={
             "anSeq": self.work.an_seq,
-            "anScore": 0,
+            "anScore": total_score,
             "anGradeCode": "50001",
             "anUserVideoMotionDataFilename": ext_file,
             "anSimularityFilename": an_file,
@@ -286,5 +287,3 @@ if __name__ == '__main__':
     },
     jwt)
     worker = Worker(work)
-    total_score = worker.get_total_score('user-video-2021-10-17T08-00-20_analysis.json')
-    print(total_score)
