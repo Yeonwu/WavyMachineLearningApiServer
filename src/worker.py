@@ -9,9 +9,9 @@ from multiprocessing.context import Process
 from enum import Enum
 from retrying import retry
 
-from exceptions import ExtractException, ComparisionException, UploadS3Exception, GetTotalScoreException, CallApiSuccessException, CallApiFailException, InvalidWorkException
-import log as log
-from json_reader import AnalysesJsonReader
+from src.exceptions import ExtractException, ComparisionException, UploadS3Exception, GetTotalScoreException, CallApiSuccessException, CallApiFailException, InvalidWorkException
+import src.log as log
+from src.json_reader import AnalysesJsonReader
 
 class WorkerResolveStatus(Enum):
     """

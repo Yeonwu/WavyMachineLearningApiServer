@@ -1,5 +1,5 @@
 import json
-from exceptions import JsonLoadException, ScoreCalculateException
+from src.exceptions import JsonLoadException, ScoreCalculateException
 
 class AnalysesJsonReader:
     def __init__(self, file):
