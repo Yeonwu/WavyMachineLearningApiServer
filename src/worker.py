@@ -9,8 +9,9 @@ from multiprocessing.context import Process
 from enum import Enum
 from retrying import retry
 
-from src.exceptions import CallApiFailException, CallApiSuccessException, ComparisionException, ExtractException, InvalidWorkException, UploadS3Exception
-import src.log as log
+from exceptions import ExtractException, ComparisionException, UploadS3Exception, GetTotalScoreException, CallApiSuccessException, CallApiFailException, InvalidWorkException
+import log as log
+from json_reader import AnalysesJsonReader
 
 class WorkerResolveStatus(Enum):
     """
@@ -20,8 +21,9 @@ class WorkerResolveStatus(Enum):
     FAIL_EXTRACTION = 2,
     FAIL_COMPARISION = 3,
     FAIL_UPLOAD = 4,
-    FAIL_CALL_API = 5,
-    FAIL = 6
+    FAIL_SCORE = 5,
+    FAIL_CALL_API = 6,
+    FAIL = 7
 
 class CMDExitCode(Enum):
     SUCCESS = 0,
@@ -94,6 +96,11 @@ class Worker(Process):
             log.error(e)
             self.__call_api_fail()
             return WorkerResolveStatus.FAIL_UPLOAD
+
+        except GetTotalScoreException as e:
+            log.error(e)
+            self.__call_api_fail()
+            return WorkerResolveStatus.FAIL_SCORE
 
         except CallApiSuccessException as e:
             log.error(e)
@@ -218,6 +225,17 @@ class Worker(Process):
             )
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
+    def get_total_score(self, an_file) -> int:
+        file_path = str(os.getenv('AN_JSON_PATH')) + f'/{an_file}'
+        try:
+            reader = AnalysesJsonReader(file_path)
+            total_score = reader.get_total_score()
+            return total_score
+        except Exception as e:
+            raise GetTotalScoreException(f'Failed to get total score from filename {an_file}') from e
+
+
+    @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_success(self, an_file, ext_file):
         log.info(f'[{os.getpid()}] Calling ApiSuccess anSeq {self.work.an_seq}')
         URL = os.getenv('API_URL')+'/analyses/result'
@@ -262,10 +280,11 @@ if __name__ == '__main__':
     work = Work({
         "an_seq": "8", 
         "user_video_filename": "wannabe_kakao_vertical.mp4",
-        "user_sec": "33",
+        "user_sec": "00:00:33",
         "ref_json_filename": "지구에이어아이들을지키러온츄의월드이즈원츄챌린지Shorts_엠뚜루마뚜루MBC공식종합채널_l2norm.json",
-        "ref_sec": "25"
+        "ref_sec": "00:00:25"
     },
     jwt)
     worker = Worker(work)
-    print(worker.resolve())
+    total_score = worker.get_total_score('user-video-2021-10-17T08-00-20_analysis.json')
+    print(total_score)
