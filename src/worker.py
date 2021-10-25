@@ -227,6 +227,7 @@ class Worker(Process):
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __get_total_score(self, an_file) -> int:
+        log.info(f'[{os.getpid()} Getting totalscore from an_file')
         file_path = str(os.getenv('AN_JSON_PATH')) + f'/{an_file}'
         try:
             reader = AnalysesJsonReader(file_path)
