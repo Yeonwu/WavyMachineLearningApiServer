@@ -17,12 +17,12 @@ class WorkerResolveStatus(Enum):
     """
     dddd
     """
-    SUCCESS = 1,
-    FAIL_EXTRACTION = 2,
-    FAIL_COMPARISION = 3,
-    FAIL_UPLOAD = 4,
-    FAIL_SCORE = 5,
-    FAIL_CALL_API = 6,
+    SUCCESS = 1
+    FAIL_EXTRACTION = 2
+    FAIL_COMPARISION = 3
+    FAIL_UPLOAD = 4
+    FAIL_SCORE = 5
+    FAIL_CALL_API = 6
     FAIL = 7
 
 class APIStatusCode(Enum):
@@ -46,10 +46,11 @@ class APIGradeCode(Enum):
             return APIGradeCode.B
         elif 85 > score >= 80:
             return APIGradeCode.C
+
 class CMDExitCode(Enum):
-    SUCCESS = 0,
-    FAILED = 1,
-    NOT_HANDLED = 2,
+    SUCCESS = 0
+    FAILED = 1
+    NOT_HANDLED = 2
 
     @staticmethod
     def loads(cmd_output: str):
