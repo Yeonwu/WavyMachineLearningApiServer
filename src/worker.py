@@ -262,51 +262,48 @@ class Worker(Process):
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_success(self, an_file, ext_file, total_score):
         log.info(f'[{os.getpid()}] Calling ApiSuccess anSeq {self.work.an_seq}')
-        URL = os.getenv('API_URL')+'/analyses/result'
-        response = requests.put(URL, json={
+        url = os.getenv('API_URL')+'/analyses/result'
+        status_code = APIStatusCode.SUCCESS.value
+        print(APIStatusCode.SUCCESS.value)
+        grade_code =  APIGradeCode.loads(total_score).value
+
+        response = requests.put(url, json={
             "anSeq": self.work.an_seq,
             "anScore": total_score,
-            "anGradeCode": "50001",
+            "anGradeCode": grade_code,
             "anUserVideoMotionDataFilename": ext_file,
             "anSimularityFilename": an_file,
-            "anStatusCode": "120001"
+            "anStatusCode": status_code
         }, headers={
             "Authorization": self.work.jwt
         })
 
         if response.status_code != 200:
-            raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response}')
+            raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response.content}')
         print(response)
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_fail(self):
         print(f'[{os.getpid()}] Calling ApiFail anSeq {self.work.an_seq}')
-        URL = os.getenv('API_URL')+'/analyses/result'
-        response = requests.put(URL, json={
+        url = os.getenv('API_URL')+'/analyses/result'
+        status_code = APIStatusCode.FAIL.value
+
+        response = requests.put(url, json={
             "anSeq": self.work.an_seq,
             "anScore": 0,
             "anGradeCode": "50001",
             "anUserVideoMotionDataFilename": "",
             "anSimularityFilename": "",
-            "anStatusCode": "120004"
+            "anStatusCode": status_code
         }, headers={
             "Authorization": self.work.jwt
         })
         if response.status_code != 200:
-            raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response}')
+            raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response.text}')
         print(response)
 
     def __clear_dir(self):
         pass
 
-if __name__ == '__main__':
-    jwt = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtYnJTZXEiOiIxIiwiZXhwIjoxNjM0MTI5ODQxLCJhY2Nlc3NUb2tlbiI6Ik5LQmlHQWNZQ2ViZFlXMEt1VkpEZDVLODFjWk03VmEyaEFKNHh3b3BiN2tBQUFGOGVIRDRVdyIsImlhdCI6MTYzNDEwODI0Mn0.4kt1bEndNSP_VWpwz7FC8qgczscNAGGglbsyXFi8Ils'
-    work = Work({
-        "an_seq": "8", 
-        "user_video_filename": "wannabe_kakao_vertical.mp4",
-        "user_sec": "00:00:33",
-        "ref_json_filename": "지구에이어아이들을지키러온츄의월드이즈원츄챌린지Shorts_엠뚜루마뚜루MBC공식종합채널_l2norm.json",
-        "ref_sec": "00:00:25"
-    },
-    jwt)
-    worker = Worker(work)
+    def test(self):
+        self.__call_api_success('hahahahah.json', 'hahahhaha_l2lorm.json', 87)
