@@ -25,6 +25,27 @@ class WorkerResolveStatus(Enum):
     FAIL_CALL_API = 6,
     FAIL = 7
 
+class APIStatusCode(Enum):
+    SUCCESS = '120003'
+    FAIL = '120004'
+
+class APIGradeCode(Enum):
+    S = '50001'
+    A = '50002'
+    B = '50003'
+    C = '50004'
+    D = '50005'
+
+    @staticmethod
+    def loads(score: int):
+        if 100 >= score >=95:
+            return APIGradeCode.S
+        elif 95 > score >= 90:
+            return APIGradeCode.A
+        elif 90 > score >= 85:
+            return APIGradeCode.B
+        elif 85 > score >= 80:
+            return APIGradeCode.C
 class CMDExitCode(Enum):
     SUCCESS = 0,
     FAILED = 1,
