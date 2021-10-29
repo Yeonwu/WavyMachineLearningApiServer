@@ -44,7 +44,7 @@ class APIGradeCode(Enum):
             return APIGradeCode.A
         elif 90 > score >= 85:
             return APIGradeCode.B
-        elif 85 > score >= 80:
+        else:
             return APIGradeCode.C
 
 class CMDExitCode(Enum):
