@@ -261,26 +261,29 @@ class Worker(Process):
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_success(self, an_file, ext_file, total_score):
-        log.info(f'[{os.getpid()}] Calling ApiSuccess anSeq {self.work.an_seq}')
-        url = os.getenv('API_URL')+'/analyses/result'
-        status_code = APIStatusCode.SUCCESS.value
-        print(APIStatusCode.SUCCESS.value)
-        grade_code =  APIGradeCode.loads(total_score).value
+        try:
+            log.info(f'[{os.getpid()}] Calling ApiSuccess anSeq {self.work.an_seq}')
+            url = os.getenv('API_URL')+'/analyses/result'
+            status_code = APIStatusCode.SUCCESS.value
+            print(APIStatusCode.SUCCESS.value)
+            grade_code =  APIGradeCode.loads(total_score).value
 
-        response = requests.put(url, json={
-            "anSeq": self.work.an_seq,
-            "anScore": total_score,
-            "anGradeCode": grade_code,
-            "anUserVideoMotionDataFilename": ext_file,
-            "anSimularityFilename": an_file,
-            "anStatusCode": status_code
-        }, headers={
-            "Authorization": self.work.jwt
-        })
+            response = requests.put(url, json={
+                "anSeq": self.work.an_seq,
+                "anScore": total_score,
+                "anGradeCode": grade_code,
+                "anUserVideoMotionDataFilename": ext_file,
+                "anSimularityFilename": an_file,
+                "anStatusCode": status_code
+            }, headers={
+                "Authorization": self.work.jwt
+            })
 
-        if response.status_code != 200:
-            raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response.content}')
-        print(response)
+            if response.status_code != 200:
+                raise CallApiSuccessException(f'[{os.getpid()}] API request Failed. body:{response.content}')
+            print(response)
+        except Exception as e:
+            raise CallApiSuccessException(f'Failed to call API Success. error: {e.with_traceback()}')
 
     @retry(stop_max_attempt_number=Work.MAX_RETRY, wait_fixed=Work.RETRY_WAIT)
     def __call_api_fail(self):
